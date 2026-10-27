@@ -1,0 +1,19 @@
+name: Feature request
+description: Suggest an improvement or a new tool to support
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+  - type: textarea
+    id: tool
+    attributes:
+      label: Tool or data location (if it is about a new tool)
+      description: Where the tool keeps its data, and on which operating system, if you know it.

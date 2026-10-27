@@ -1,0 +1,1880 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgenticVisor</title>
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    --bg: #f6f5f1; --panel: #ffffff; --border: #e3e1d9; --text: #1c1c1a;
+    --muted: #6f6f67; --accent: #b45309; --accent-soft: #fbeedd; --side: #ecebe5;
+    --cache: #64748b; --sessions: #16a34a; --config: #dc2626;
+    --orphaned: #9333ea; --plugins: #0891b2; --skills: #0891b2; --other: #94a3b8;
+    --agent-claude: #c2410c; --agent-cursor: #4f46e5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161614; --panel: #201e1b; --border: #37342e; --text: #ece9e2; --muted: #a09c91;
+      --accent-soft: #3a2a18; --side: #1b1a17; --agent-claude: #f08a5d; --agent-cursor: #9aa6ff; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.55 -apple-system, "SF Pro Text", system-ui, sans-serif; }
+  h1 { font-size: 26px; margin: 0; font-weight: 650; letter-spacing: -.01em; }
+  h2 { font-size: 16px; margin: 0; font-weight: 600; }
+  .note { color: var(--muted); font-size: 13px; }
+  .sub { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  button { font: inherit; border: 1px solid var(--border); background: var(--panel);
+    color: var(--text); padding: 8px 14px; border-radius: 8px; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  select, input[type=text] { font: inherit; padding: 7px 11px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--panel); color: var(--text); }
+  input[type=text] { min-width: 240px; }
+  code { font-family: ui-monospace, "SF Mono", monospace; font-size: 12.5px; background: var(--accent-soft); padding: 1px 5px; border-radius: 4px; }
+
+  /* Layout: fixed side menu + content */
+  .layout { display: grid; grid-template-columns: 272px minmax(0, 1fr); min-height: 100vh; }
+  .sidebar { background: var(--side); border-right: 1px solid var(--border); padding: 22px 16px;
+    position: sticky; top: 0; height: 100vh; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; }
+  .brand { display: flex; gap: 12px; align-items: center; padding: 0 8px; }
+  .brand svg { width: 42px; height: 42px; flex-shrink: 0; }
+  .brand h1 { font-size: 17px; line-height: 1.2; }
+  .nav-section { border-top: 1px solid var(--border); padding-top: 14px; }
+  .nav-section:first-of-type { border-top: none; padding-top: 0; }
+  .nav-section > h3 { display: flex; align-items: center; gap: 8px; font-size: 12px; text-transform: uppercase;
+    letter-spacing: .08em; color: var(--muted); margin: 0 8px 8px; font-weight: 650; }
+  .agent-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+  .nav-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;
+    border: none; background: none; padding: 8px 10px; border-radius: 8px; text-align: left; color: var(--text); font-size: 14.5px; }
+  .nav-item:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); border: none; }
+  .nav-item.active { background: var(--panel); box-shadow: inset 3px 0 0 var(--accent); font-weight: 600; }
+  .nav-item.sub { padding-left: 22px; font-size: 14px; }
+  .nav-count { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .sidebar-foot { margin-top: auto; }
+  .sidebar-foot button { width: 100%; }
+
+  .content { min-width: 0; padding: 30px 40px 110px; }
+  .view-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+    padding-bottom: 18px; border-bottom: 1px solid var(--border); margin-bottom: 22px; }
+  .eyebrow { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; text-transform: uppercase;
+    letter-spacing: .08em; color: var(--muted); font-weight: 650; margin-bottom: 6px; }
+  .view-head p { margin: 6px 0 0; color: var(--muted); font-size: 14px; max-width: 74ch; }
+  .flash { min-height: 1.4em; color: var(--config); font-size: 13.5px; margin-bottom: 12px; }
+  .view[hidden] { display: none; }
+  [hidden] { display: none !important; }
+  .usage-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); margin-top: 28px; }
+  .usage-details { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); margin-top: 16px; }
+  .usage-details > .card { min-width: 0; overflow-x: auto; }
+  .usage-table { width: 100%; min-width: 0; font-size: 13.5px; }
+  .usage-table td, .usage-table th { padding: 8px 10px; }
+  .usage-note { color: var(--muted); font-size: 12.5px; margin-top: 10px; }
+  .usage-bar { height: 8px; border-radius: 99px; background: var(--border); overflow: hidden; margin-top: 6px; }
+  .usage-bar > span { display: block; height: 100%; background: var(--accent); }
+
+  /* Resumen */
+  .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; min-width: 0; }
+  .card .big { font-size: 26px; font-weight: 650; }
+  .card .label { color: var(--muted); font-size: 13px; margin-bottom: 8px; }
+  .chart-row { display: flex; gap: 22px; align-items: center; flex-wrap: wrap; }
+  .legend { display: flex; flex-direction: column; gap: 4px; font-size: 13px; flex: 1; min-width: 180px;
+    max-height: 160px; overflow-y: auto; }
+  .legend-item { display: flex; align-items: center; gap: 6px; cursor: pointer;
+    padding: 4px 8px; border-radius: 6px; border: none; background: none; color: inherit;
+    font: inherit; text-align: left; width: 100%; }
+  .legend-item:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+  .legend-swatch { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+  .legend-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .legend-size { color: var(--muted); margin-left: auto; padding-left: 8px; flex-shrink: 0; }
+  .stat-recoverable { display: block; width: 100%; text-align: left; margin-top: 14px;
+    padding: 10px 12px; border-radius: 9px; cursor: pointer; font: inherit; font-size: 13px;
+    font-weight: 600; color: var(--text);
+    border: 1px solid color-mix(in srgb, var(--cache) 45%, var(--border));
+    background: color-mix(in srgb, var(--cache) 12%, transparent); }
+  .stat-line { color: var(--muted); font-size: 13px; margin-top: 10px; }
+  .danger-btn { display: block; width: 100%; margin-top: 14px; padding: 10px 12px;
+    border-radius: 9px; font-size: 13px; font-weight: 600; cursor: pointer;
+    border: 1px solid color-mix(in srgb, var(--config) 45%, var(--border));
+    background: color-mix(in srgb, var(--config) 10%, transparent); color: var(--text); }
+  .warning-box { margin-top: 10px; padding: 10px 12px; border-radius: 9px; font-size: 13px;
+    background: color-mix(in srgb, var(--config) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--config) 40%, var(--border)); }
+  .warning-box[hidden] { display: none; }
+
+  /* Tabla */
+  .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+  .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; background: var(--panel); }
+  table { width: 100%; min-width: 900px; border-collapse: collapse; background: var(--panel); }
+  th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--border); font-size: 14px; }
+  th { color: var(--muted); font-weight: 500; cursor: pointer; user-select: none; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+  .path { font-family: ui-monospace, "SF Mono", monospace; font-size: 12.5px;
+    color: var(--muted); word-break: break-all; }
+  .title { font-weight: 600; margin-bottom: 3px; }
+  .badge { display: inline-block; padding: 2px 9px; border-radius: 99px; font-size: 12px; color: #fff; }
+  .sensitive-flag { color: var(--config); font-weight: 600; }
+  .expand-toggle { border: 1px solid var(--border); background: var(--panel); cursor: pointer;
+    width: 22px; height: 22px; padding: 0; display: inline-flex; align-items: center;
+    justify-content: center; color: var(--accent); font-size: 14px; font-weight: 700;
+    line-height: 1; border-radius: 5px; flex-shrink: 0; }
+  .expand-toggle.expanded { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .expand-spacer { display: inline-block; width: 22px; flex-shrink: 0; }
+  tr.child-row td { background: color-mix(in srgb, var(--text) 3%, transparent); }
+  .empty { text-align: center; color: var(--muted); padding: 60px 0; }
+
+  /* Content search */
+  .cs-head { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; }
+  .cs-head input[type=text] { flex: 1; min-width: 260px; }
+  #contentResults { max-height: 62vh; overflow-y: auto; margin-top: 12px; }
+  .cs-item { background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 12px 16px; margin-bottom: 10px; }
+  .cs-title { display: flex; gap: 8px; align-items: center; }
+  .linkish { border: none; background: none; padding: 0; font-weight: 600; cursor: pointer;
+    color: var(--text); text-align: left; font-size: 15px; }
+  .linkish:hover { text-decoration: underline; color: var(--accent); }
+  .snippet { margin: 6px 0; white-space: pre-wrap; word-break: break-word; font-size: 13.5px; }
+  .snippet mark { background: color-mix(in srgb, var(--accent) 35%, transparent);
+    color: inherit; border-radius: 3px; padding: 0 2px; }
+
+  /* Cards for skills, plugins, canvases and artifacts */
+  .ext-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); }
+  .ext-card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 18px; display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+  .ext-card.off { opacity: .6; }
+  .ext-name { font-weight: 600; font-size: 15px; word-break: break-word; }
+  .ext-desc { color: var(--muted); font-size: 13px; flex: 1; }
+  .ext-meta { color: var(--muted); font-size: 12px; }
+  .ext-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+  .chip { display: inline-block; font-size: 12px; padding: 1px 9px; border-radius: 99px;
+    border: 1px solid var(--border); color: var(--muted); word-break: break-all; }
+  .chip.link { border-color: color-mix(in srgb, var(--cache) 50%, var(--border)); color: var(--cache); }
+  .small-btn { padding: 5px 11px; font-size: 13px; }
+  .danger-small { border-color: color-mix(in srgb, var(--config) 45%, var(--border)); color: var(--config); }
+  .open-link { font-size: 13.5px; color: var(--accent); word-break: break-all; }
+  .switch { position: relative; display: inline-block; width: 36px; height: 21px; flex-shrink: 0; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch span { position: absolute; inset: 0; background: var(--border); border-radius: 99px; cursor: pointer; transition: background .15s; }
+  .switch span::after { content: ""; position: absolute; left: 3px; top: 3px; width: 15px; height: 15px;
+    border-radius: 50%; background: #fff; transition: transform .15s; }
+  .switch input:checked + span { background: var(--sessions); }
+  .switch input:checked + span::after { transform: translateX(15px); }
+  .switch input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* Dialogs */
+  dialog { border-radius: 14px; border: 1px solid var(--border); padding: 0;
+    background: var(--panel); color: var(--text); max-width: 480px; }
+  dialog::backdrop { background: rgba(0,0,0,.4); }
+  .dialog-body { padding: 22px; }
+  .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; padding: 15px 22px;
+    border-top: 1px solid var(--border); }
+  dialog.editor { max-width: 800px; width: calc(100% - 32px); }
+  .ed-title { font-weight: 600; font-size: 16px; }
+  #edError { color: var(--config); min-height: 1.2em; margin-top: 6px; }
+  #cvCode { max-height: 60vh; overflow: auto; margin: 10px 0 0; padding: 11px; border-radius: 9px;
+    border: 1px solid var(--border); background: var(--bg); font: 12.5px/1.5 ui-monospace, "SF Mono", monospace;
+    white-space: pre; }
+
+  .selection-bar { position: fixed; bottom: 0; left: 272px; right: 0; background: var(--panel);
+    border-top: 1px solid var(--border); padding: 15px 40px; display: none;
+    align-items: center; justify-content: space-between; gap: 12px; }
+  .selection-bar.visible { display: flex; }
+
+  /* Embedded code editor (CodeMirror) */
+  dialog.editor { max-width: 980px; }
+  .cm-host { height: 58vh; min-height: 320px; border: 1px solid var(--border); border-radius: 9px; overflow: hidden; margin-top: 12px; }
+  .cm-host .cm-editor { height: 100%; }
+  .cm-host .cm-scroller { overflow: auto; }
+  .json-status { font-size: 12.5px; margin-top: 8px; min-height: 1.3em; }
+  .json-status.ok { color: var(--sessions); }
+  .json-status.err { color: var(--config); }
+
+  /* Conversation preview */
+  dialog.preview { max-width: 920px; width: calc(100% - 32px); }
+  .pv-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .pv-body { max-height: 66vh; overflow-y: auto; margin-top: 14px; display: grid; gap: 10px; }
+  .pv-msg { border-radius: 12px; padding: 10px 14px; border: 1px solid var(--border); background: var(--panel); min-width: 0; }
+  .pv-role { font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 650; margin-bottom: 4px; }
+  .pv-text { white-space: pre-wrap; word-break: break-word; font-size: 14px; }
+  .pv-user { background: color-mix(in srgb, var(--agent-cursor) 8%, var(--panel)); }
+  .pv-assistant { background: color-mix(in srgb, var(--agent-claude) 6%, var(--panel)); }
+  .pv-thinking, .pv-tool { background: transparent; border-style: dashed; }
+  .pv-thinking .pv-text { font-style: italic; color: var(--muted); }
+  .pv-tool summary, .pv-thinking summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+  .pv-tool pre { margin: 8px 0 0; max-height: 40vh; overflow: auto; white-space: pre-wrap; word-break: break-word;
+    font: 12px/1.5 ui-monospace, "SF Mono", monospace; color: var(--text); }
+  .pv-truncated { color: var(--muted); font-size: 12px; margin-top: 6px; }
+  .pv-pager { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 22px;
+    border-top: 1px solid var(--border); }
+
+  /* Narrow screens: the menu becomes a horizontal strip at the top */
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: minmax(0, 1fr); }
+    .sidebar { min-width: 0; }
+    .sidebar { position: static; height: auto; border-right: none;
+      border-bottom: 1px solid var(--border); padding: 14px 16px; gap: 12px; }
+    .nav-sections { display: flex; gap: 14px; overflow-x: auto; }
+    .nav-section { border-top: none; padding-top: 0; flex-shrink: 0; display: flex; gap: 6px; align-items: center; }
+    .nav-section > h3 { margin: 0 4px 0 0; }
+    .nav-item { width: auto; white-space: nowrap; }
+    .sidebar-foot { display: none; }
+    .content { padding: 20px 16px 110px; }
+    .usage-details { grid-template-columns: minmax(0, 1fr); }
+    .selection-bar { left: 0; padding: 14px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+<aside class="sidebar">
+  <div class="brand">
+    <svg viewBox="0 0 42 42" aria-hidden="true">
+      <rect x="2" y="5" width="28" height="32" rx="6" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2"/>
+      <rect x="7" y="11" width="7" height="7" rx="2" fill="var(--sessions)"/>
+      <rect x="16" y="11" width="7" height="7" rx="2" fill="var(--cache)"/>
+      <rect x="7" y="20" width="7" height="7" rx="2" fill="var(--orphaned)"/>
+      <rect x="16" y="20" width="7" height="7" rx="2" fill="var(--plugins)"/>
+      <circle cx="31" cy="31" r="7.5" fill="var(--panel)" stroke="var(--accent)" stroke-width="3"/>
+      <line x1="36.5" y1="36.5" x2="40" y2="40" stroke="var(--accent)" stroke-width="3.4" stroke-linecap="round"/>
+    </svg>
+    <div>
+      <h1>Agentic<br>Visor</h1>
+      <div class="sub" id="generatedAt">Escaneando…</div>
+    </div>
+  </div>
+
+  <nav class="nav-sections">
+    <div class="nav-section">
+      <h3>General</h3>
+      <button class="nav-item" data-view="resumen">Resumen</button>
+      <button class="nav-item" data-feature="search" data-view="buscar">Search conversations</button>
+    </div>
+
+    <div class="nav-section">
+      <h3><span class="agent-dot" style="background:var(--agent-claude)"></span>Claude</h3>
+      <button class="nav-item sub" data-view="table" data-filter="claude:sessions">Sessions <span class="nav-count" data-count="claude:sessions"></span></button>
+      <button class="nav-item sub" data-view="table" data-filter="claude:cache">Cache <span class="nav-count" data-count="claude:cache"></span></button>
+      <button class="nav-item sub" data-view="table" data-filter="claude:orphaned">Orphans <span class="nav-count" data-count="claude:orphaned"></span></button>
+      <button class="nav-item sub" data-feature="config" data-view="config-claude">Configuration <span class="nav-count" data-count="config-claude"></span></button>
+      <button class="nav-item sub" data-feature="skills" data-view="claude-skills">Skills <span class="nav-count" data-count="claude-skills"></span></button>
+      <button class="nav-item sub" data-feature="plugins" data-view="claude-plugins">Plugins <span class="nav-count" data-count="claude-plugins"></span></button>
+      <button class="nav-item sub" data-feature="artifacts" data-view="claude-artifacts">Artifacts <span class="nav-count" data-count="claude-artifacts"></span></button>
+    </div>
+
+    <div class="nav-section">
+      <h3><span class="agent-dot" style="background:var(--agent-cursor)"></span>Cursor</h3>
+      <button class="nav-item sub" data-view="table" data-filter="cursor:sessions">Sessions <span class="nav-count" data-count="cursor:sessions"></span></button>
+      <button class="nav-item sub" data-view="table" data-filter="cursor:cache">Cache <span class="nav-count" data-count="cursor:cache"></span></button>
+      <button class="nav-item sub" data-view="table" data-filter="cursor:orphaned">Orphans <span class="nav-count" data-count="cursor:orphaned"></span></button>
+      <button class="nav-item sub" data-feature="config" data-view="config-cursor">Configuration <span class="nav-count" data-count="config-cursor"></span></button>
+      <button class="nav-item sub" data-feature="skills" data-view="cursor-skills">Skills <span class="nav-count" data-count="cursor-skills"></span></button>
+      <button class="nav-item sub" data-feature="plugins" data-view="cursor-plugins">Plugins <span class="nav-count" data-count="cursor-plugins"></span></button>
+      <button class="nav-item sub" data-feature="artifacts" data-view="canvases">Canvases <span class="nav-count" data-count="canvases"></span></button>
+    </div>
+
+    <div class="nav-section">
+      <h3>All</h3>
+      <button class="nav-item" data-view="table" data-filter="all:">Everything detected <span class="nav-count" data-count="all:"></span></button>
+    </div>
+  </nav>
+
+  <div class="sidebar-foot">
+    <button id="rescanBtn">↻ Volver a escanear</button>
+  </div>
+</aside>
+
+<div class="content">
+
+  <div class="flash" id="flash"></div>
+
+  <!-- General -->
+  <section class="view" data-view-id="resumen">
+    <div class="view-head">
+      <div>
+        <div class="eyebrow">General</div>
+        <h1>Resumen</h1>
+        <p>How much each thing takes up and what can be cleaned. Click a category to see it in the list.</p>
+      </div>
+    </div>
+    <div class="summary" id="summary"></div>
+
+    <section id="usageSection" hidden>
+      <div class="view-head" style="margin-top:34px; margin-bottom:0; padding-bottom:12px;">
+        <div>
+          <div class="eyebrow">Claude · Consumo</div>
+          <h1 style="font-size:20px;">Session tokens</h1>
+          <p>What Claude Code and Claude Desktop record for each response. Each response is counted once, even if the file repeats it.</p>
+        </div>
+      </div>
+      <div class="usage-grid" id="usageCards"></div>
+      <div class="usage-details" id="usageDetails"></div>
+    </section>
+  </section>
+
+  <section class="view" data-view-id="buscar" hidden>
+    <div class="view-head">
+      <div>
+        <div class="eyebrow">General</div>
+        <h1>Search conversations</h1>
+        <p>Searches inside the text of sessions and plans, not only titles. Minimum 3 characters.</p>
+      </div>
+    </div>
+    <div class="cs-head">
+      <input type="text" id="contentQuery" placeholder="Text you remember from the conversation…">
+      <select id="toolOutputs" title="Which tool outputs are indexed. Changing it rebuilds the index.">
+        <option value="none">No tool outputs</option>
+        <option value="capped">Tool outputs truncated (5 KB)</option>
+        <option value="full">All tool outputs</option>
+      </select>
+      <button id="reindexBtn">↻ Update index</button>
+    </div>
+    <div class="note" id="indexStatus"></div>
+    <div id="contentResults"></div>
+  </section>
+
+  <!-- Entry list: sessions, cache, orphans, config and "all" -->
+  <section class="view" data-view-id="table" hidden>
+    <div class="view-head">
+      <div>
+        <div class="eyebrow" id="tableEyebrow">All</div>
+        <h1 id="tableTitle">Everything detected</h1>
+        <p id="tableDesc"></p>
+      </div>
+    </div>
+    <div class="toolbar">
+      <select id="toolFilter"><option value="">All tools</option></select>
+      <select id="staleFilter">
+        <option value="0">Cualquier antigüedad</option>
+        <option value="30">Untouched for 30+ days</option>
+        <option value="90">Untouched for 90+ days</option>
+        <option value="180">Untouched for 180+ days</option>
+        <option value="365">Untouched for 1+ year</option>
+      </select>
+      <input type="text" id="searchInput" placeholder="Filter by path, title or note…">
+      <label style="display:flex; align-items:center; gap:6px; color:var(--muted);">
+        <input type="checkbox" id="cleanupOnly"> solo candidatos a limpieza
+      </label>
+    </div>
+    <div class="table-wrap">
+      <table id="table">
+        <thead>
+          <tr>
+            <th style="width:56px"><input type="checkbox" id="selectAll"></th>
+            <th data-sort="tool">Herramienta</th>
+            <th data-sort="category">Category</th>
+            <th data-sort="path">Session / path</th>
+            <th data-sort="size_bytes">Size</th>
+            <th data-sort="item_count">Ficheros</th>
+            <th data-sort="last_modified">Last modified</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="empty" id="emptyMsg" style="display:none">No results with this filter.</div>
+  </section>
+
+  <!-- Claude -->
+  <section class="view" data-view-id="claude-skills" hidden>
+    <div class="view-head">
+      <div>
+        <div class="eyebrow"><span class="agent-dot" style="background:var(--agent-claude)"></span>Claude · Skills</div>
+        <h1>Claude Code skills</h1>
+        <p>Enabling or disabling moves the folder to <code>skills-disabled/</code> and applies immediately. A shared link to <code>~/.agents</code> is only unlinked from Claude.</p>
+      </div>
+    </div>
+    <div class="ext-grid" id="grid-claude-skills"></div>
+  </section>
+
+  <section class="view" data-view-id="claude-plugins" hidden>
+    <div class="view-head">
+      <div>
+        <div class="eyebrow"><span class="agent-dot" style="background:var(--agent-claude)"></span>Claude · Plugins</div>
+        <h1>Claude Code plugins</h1>
+        <p>The switch changes <code>enabledPlugins</code> in <code>settings.json</code>. If Claude Code was already open, restart it to notice.</p>
+      </div>
+    </div>
+    <div class="ext-grid" id="grid-claude-plugins"></div>
+  </section>
+
+  <section class="view" data-view-id="claude-artifacts" hidden>
+    <div class="view-head">
+      <div>
+        <div class="eyebrow"><span class="agent-dot" style="background:var(--agent-claude)"></span>Claude · Artifacts</div>
+        <h1>Claude artifacts</h1>
+        <p>Publications recorded in the Claude Code transcripts. The original lives on claude.ai; here they are only listed and opened.</p>
+      </div>
+    </div>
+    <div class="ext-grid" id="grid-claude-artifacts"></div>
+  </section>
+
+  <!-- Cursor -->
+  <section class="view" data-view-id="cursor-skills" hidden>
+    <div class="view-head">
+      <div>
+        <div class="eyebrow"><span class="agent-dot" style="background:var(--agent-cursor)"></span>Cursor · Skills</div>
+        <h1>Cursor skills</h1>
+        <p>The ones built into Cursor. They can be viewed and edited, not enabled or disabled.</p>
+      </div>
+    </div>
+    <div class="ext-grid" id="grid-cursor-skills"></div>
+  </section>
+
+  <section class="view" data-view-id="cursor-plugins" hidden>
+    <div class="view-head">
+      <div>
+        <div class="eyebrow"><span class="agent-dot" style="background:var(--agent-cursor)"></span>Cursor · Plugins</div>
+        <h1>Cursor plugins</h1>
+        <p>Read-only: we do not yet know how they are enabled.</p>
+      </div>
+    </div>
+    <div class="ext-grid" id="grid-cursor-plugins"></div>
+  </section>
+
+  <section class="view" data-view-id="canvases" hidden>
+    <div class="view-head">
+      <div>
+        <div class="eyebrow"><span class="agent-dot" style="background:var(--agent-cursor)"></span>Cursor · Canvases</div>
+        <h1>Cursor canvases</h1>
+        <p>Components the agent generates in <code>canvases/</code> in each project. Deleting moves them to <code>trash/</code>.</p>
+      </div>
+    </div>
+    <div class="ext-grid" id="grid-canvases"></div>
+  </section>
+
+  <!-- Configuration: view, and edit whatever is safe -->
+  <section class="view" data-view-id="config-claude" hidden>
+    <div class="view-head">
+      <div>
+        <div class="eyebrow"><span class="agent-dot" style="background:var(--agent-claude)"></span>Claude · Configuration</div>
+        <h1>Claude configuration</h1>
+        <p>Files without credentials can be edited here, with a backup and JSON validation. Files with credentials or the session are shown masked and can only be read.</p>
+      </div>
+    </div>
+    <div class="ext-grid" id="grid-config-claude"></div>
+  </section>
+
+  <section class="view" data-view-id="config-cursor" hidden>
+    <div class="view-head">
+      <div>
+        <div class="eyebrow"><span class="agent-dot" style="background:var(--agent-cursor)"></span>Cursor · Configuration</div>
+        <h1>Cursor configuration</h1>
+        <p>Files without credentials can be edited here, with a backup and JSON validation. Files with credentials or the session are shown masked and can only be read.</p>
+      </div>
+    </div>
+    <div class="ext-grid" id="grid-config-cursor"></div>
+  </section>
+
+</div>
+</div>
+
+<div class="selection-bar" id="selectionBar">
+  <span id="selectionSummary"></span>
+  <button class="primary" id="trashSelectedBtn">Move selected to trash</button>
+</div>
+
+<dialog id="confirmDialog">
+  <div class="dialog-body">
+    <p id="confirmText"></p>
+    <div class="warning-box" id="confirmWarning" hidden>
+      ⚠ At least one of these items was modified today — it may be in use right now.
+    </div>
+    <p class="note">They are moved to <code>AgenticVisor/trash/</code>, not deleted. You can recover them by hand as long as you do not empty that folder.</p>
+  </div>
+  <div class="dialog-actions">
+    <button id="cancelTrash">Cancel</button>
+    <button class="primary" id="confirmTrash">Move to trash</button>
+  </div>
+</dialog>
+
+<dialog id="emptyTrashDialog">
+  <div class="dialog-body">
+    <p><strong>This IS a permanent deletion</strong>, not a move.</p>
+    <p class="note" id="emptyTrashText"></p>
+  </div>
+  <div class="dialog-actions">
+    <button id="cancelEmptyTrash">Cancel</button>
+    <button class="primary" id="confirmEmptyTrash" style="background:var(--config); border-color:var(--config);">
+      Borrar definitivamente
+    </button>
+  </div>
+</dialog>
+
+<dialog id="actionDialog">
+  <div class="dialog-body">
+    <p id="actionText"></p>
+    <div class="warning-box" id="actionWarning" hidden>
+      ⚠ Modified in the last 24 h — it may be in use right now.
+    </div>
+    <p class="note" id="actionNote"></p>
+  </div>
+  <div class="dialog-actions">
+    <button id="actionCancel">Cancel</button>
+    <button class="primary" id="actionConfirm">Confirm</button>
+  </div>
+</dialog>
+
+<dialog id="skillEditor" class="editor">
+  <div class="dialog-body">
+    <div class="ed-title" id="edTitle"></div>
+    <div class="note" id="edPath"></div>
+    <div class="warning-box" id="edLinked" hidden></div>
+    <div class="cm-host" id="edHost"></div>
+    <div class="note" id="edError"></div>
+  </div>
+  <div class="dialog-actions">
+    <button id="edClose">Close</button>
+    <button class="primary" id="edSave" disabled>Save</button>
+  </div>
+</dialog>
+
+<dialog id="configEditor" class="editor">
+  <div class="dialog-body">
+    <div class="ed-title" id="ceTitle"></div>
+    <div class="note" id="cePath"></div>
+    <div class="cm-host" id="ceHost"></div>
+    <div class="json-status" id="ceStatus"></div>
+    <div class="note" id="ceError"></div>
+  </div>
+  <div class="dialog-actions">
+    <button id="ceClose">Close</button>
+    <button id="ceFormat">Format JSON</button>
+    <button class="primary" id="ceSave" disabled>Save</button>
+  </div>
+</dialog>
+
+<dialog id="previewDialog" class="preview">
+  <div class="dialog-body">
+    <div class="pv-head">
+      <div class="ed-title" id="pvTitle"></div>
+      <div class="note" id="pvMeta"></div>
+    </div>
+    <div class="pv-body" id="pvBody"></div>
+  </div>
+  <div class="pv-pager">
+    <button id="pvPrev">← Anteriores</button>
+    <span class="note" id="pvPage"></span>
+    <button id="pvNext">Siguientes →</button>
+  </div>
+  <div class="dialog-actions">
+    <button id="pvClose">Close</button>
+  </div>
+</dialog>
+
+<dialog id="canvasViewer" class="editor">
+  <div class="dialog-body">
+    <div class="ed-title" id="cvTitle"></div>
+    <div class="note" id="cvPath"></div>
+    <pre id="cvCode"></pre>
+  </div>
+  <div class="dialog-actions">
+    <button id="cvClose">Close</button>
+  </div>
+</dialog>
+
+<script src="/vendor/cm-json.js"></script>
+<script>
+const CATEGORY_LABELS = {
+  sessions: "Sessions", cache: "Cache", config: "Sensitive config",
+  orphaned: "Orphans", plugins: "Plugins (data)", skills: "Skills", other: "Other",
+};
+const CATEGORY_DESCRIPTIONS = {
+  sessions: "Conversations, plans and saved sessions kept by the tool.",
+  cache: "Data the tool regenerates by itself. These are the safest candidates to clean.",
+  config: "Settings and files that may contain credentials. To view or edit them, use the Configuration section of each agent.",
+  orphaned: "Leftovers from projects that no longer exist on disk.",
+  plugins: "Data and cache of the installed plugins.",
+  other: "Anything that does not fit a category above.",
+};
+const AGENTS = {
+  claude: { name: "Claude", tools: ["claude-code", "claude-desktop"], color: "var(--agent-claude)" },
+  cursor: { name: "Cursor", tools: ["cursor-cli", "cursor-desktop"], color: "var(--agent-cursor)" },
+};
+const CLEANUP_CATEGORIES = new Set(["cache", "orphaned"]);
+const VIEW_IDS = [
+  "resumen", "buscar", "table", "claude-skills", "claude-plugins", "claude-artifacts",
+  "cursor-skills", "cursor-plugins", "canvases", "config-claude", "config-cursor",
+];
+
+// Which features this server version has. Loaded from /api/features;
+// anything missing does not appear in the menu and cannot be opened.
+const FEATURES = { search: true, skills: true, plugins: true, artifacts: true, config: true, preview: true };
+const VIEW_FEATURE = {
+  buscar: "search", "claude-skills": "skills", "claude-plugins": "plugins",
+  "claude-artifacts": "artifacts", "cursor-skills": "skills", "cursor-plugins": "plugins",
+  canvases: "artifacts", "config-claude": "config", "config-cursor": "config",
+};
+
+async function loadFeatures() {
+  try {
+    Object.assign(FEATURES, await (await fetch("/api/features")).json());
+  } catch (err) {
+    // Without a response, everything stays visible: the server has every feature.
+  }
+  document.querySelectorAll("[data-feature]").forEach(btn => {
+    btn.hidden = !FEATURES[btn.dataset.feature];
+  });
+}
+
+let state = {
+  entries: [], sortKey: "size_bytes", sortDir: -1, selected: new Set(),
+  expandedPaths: new Set(),   // paths whose row is expanded
+  childrenCache: new Map(),   // path -> children[] already requested from /api/children
+  filterKey: "all:",          // "<scope>:<category>", e.g. "claude:sessions"
+  view: "resumen",
+};
+
+// ---- List filters: scope (all, Claude or Cursor) + category ----
+function parseFilterKey(key) {
+  const [scope, category = ""] = key.split(":");
+  return { scope, category };
+}
+
+function filterSpec(key) {
+  const { scope, category } = parseFilterKey(key);
+  const agent = AGENTS[scope];
+  const tools = agent ? agent.tools : null;
+  const catLabel = CATEGORY_LABELS[category] || "";
+  let label;
+  if (!agent) label = category ? `${catLabel} · all tools` : "Everything detected";
+  else label = category ? `${catLabel} of ${agent.name}` : `${agent.name}: all`;
+  return {
+    key: `${scope}:${category}`, tools, category, label,
+    desc: category ? CATEGORY_DESCRIPTIONS[category] || "" :
+      "Everything on disk, grouped by tool. Skills and artifacts have their own section.",
+    eyebrow: agent ? agent.name : "All",
+    color: agent ? agent.color : null,
+  };
+}
+
+function matchesFilter(entry, spec) {
+  return entry.category !== "skills" &&
+    (!spec.tools || spec.tools.includes(entry.tool)) &&
+    (!spec.category || entry.category === spec.category);
+}
+
+// ---- Navigation ----
+function showView(viewId) {
+  if (!VIEW_IDS.includes(viewId)) viewId = "resumen";
+  if (VIEW_FEATURE[viewId] && !FEATURES[VIEW_FEATURE[viewId]]) viewId = "resumen";
+  state.view = viewId;
+  document.querySelectorAll("[data-view-id]").forEach(s => {
+    s.hidden = s.dataset.viewId !== viewId;
+  });
+  document.querySelectorAll(".nav-item").forEach(b => {
+    const isTable = b.dataset.view === "table";
+    const active = isTable
+      ? viewId === "table" && b.dataset.filter === state.filterKey
+      : b.dataset.view === viewId;
+    b.classList.toggle("active", active);
+  });
+  const hash = viewId === "table" ? `table/${state.filterKey}` : viewId;
+  if (location.hash !== "#" + hash) history.replaceState(null, "", "#" + hash);
+}
+
+// Shows the list with a filter. `cleanupOnly` keeps only cache and orphans.
+function goTable(key, cleanupOnly = false) {
+  state.filterKey = filterSpec(key).key;
+  document.getElementById("cleanupOnly").checked = cleanupOnly;
+  renderTableHeader();
+  showView("table");
+  render();
+}
+
+function renderTableHeader() {
+  const spec = filterSpec(state.filterKey);
+  document.getElementById("tableTitle").textContent = spec.label;
+  document.getElementById("tableDesc").textContent = spec.desc;
+  const eyebrow = document.getElementById("tableEyebrow");
+  eyebrow.innerHTML = spec.color
+    ? `<span class="agent-dot" style="background:${spec.color}"></span>${escapeHtml(spec.eyebrow)}`
+    : escapeHtml(spec.eyebrow);
+}
+
+function flash(text) {
+  document.getElementById("flash").textContent = text || "";
+}
+
+function setCount(key, n) {
+  document.querySelectorAll(`[data-count="${key}"]`).forEach(el => {
+    el.textContent = n;
+  });
+}
+
+document.querySelectorAll(".nav-item").forEach(btn => {
+  btn.onclick = () => {
+    if (btn.dataset.view === "table") goTable(btn.dataset.filter);
+    else showView(btn.dataset.view);
+  };
+});
+
+// ---- Scan and list ----
+async function loadScan() {
+  document.getElementById("generatedAt").textContent = "Escaneando…";
+  const [scanRes, trashRes] = await Promise.all([
+    fetch("/api/scan"),
+    fetch("/api/trash_info"),
+  ]);
+  const data = await scanRes.json();
+  const trashInfo = await trashRes.json();
+  state.entries = data.entries;
+  state.selected.clear();
+  state.expandedPaths.clear();
+  state.childrenCache.clear();
+  document.getElementById("generatedAt").textContent =
+    `${data.entries.length} entradas · ${data.generated_at}`;
+  renderSummary(data.summary, data.entries, trashInfo);
+  populateToolFilter(data.entries);
+  updateNavCounts(data.entries);
+  render();
+}
+
+function updateNavCounts(entries) {
+  document.querySelectorAll("[data-filter]").forEach(btn => {
+    const spec = filterSpec(btn.dataset.filter);
+    setCount(spec.key, entries.filter(e => matchesFilter(e, spec)).length);
+  });
+}
+
+// Stable color per tool name (same hash -> same shade
+// always, without maintaining a manual palette for "unknown:X").
+function colorForTool(name) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  return `hsl(${hash % 360}, 55%, 48%)`;
+}
+
+function renderSummary(summary, entries, trashInfo) {
+  const el = document.getElementById("summary");
+
+  const recoverable = Object.entries(summary.by_category)
+    .filter(([cat]) => CLEANUP_CATEGORIES.has(cat))
+    .reduce((sum, [, size]) => sum + size, 0);
+  const sessionsCount = entries.filter(e => e.category === "sessions").length;
+  const orphanedCount = entries.filter(e => e.category === "orphaned").length;
+
+  const totalCard = `
+    <div class="card">
+      <div class="label">Total detected size</div>
+      <div class="big">${humanSize(summary.total_size_bytes)}</div>
+      <button class="stat-recoverable" id="recoverableStat" title="Show only cache and orphans">
+        ♻ ${humanSize(recoverable)} safe to clean
+      </button>
+      <div class="stat-line">${entries.length} items · ${sessionsCount} sessions · ${orphanedCount} orphans</div>
+    </div>`;
+
+  const catItems = Object.entries(summary.by_category).sort((a, b) => b[1] - a[1])
+    .map(([cat, size]) => ({ key: cat, label: CATEGORY_LABELS[cat] || cat, size, color: `var(--${cat})` }));
+  const catCard = `
+    <div class="card" style="grid-column: span 2;">
+      <div class="label">By category</div>
+      <div class="chart-row">
+        ${donutSVG(catItems, summary.total_size_bytes)}
+        ${legendHtml(catItems, "category")}
+      </div>
+    </div>`;
+
+  const toolItems = Object.entries(summary.by_tool).sort((a, b) => b[1] - a[1])
+    .map(([tool, size]) => ({ key: tool, label: tool, size, color: colorForTool(tool) }));
+  const toolCard = `
+    <div class="card" style="grid-column: span 2;">
+      <div class="label">By tool</div>
+      <div class="chart-row">
+        ${donutSVG(toolItems, summary.total_size_bytes)}
+        ${legendHtml(toolItems, "tool")}
+      </div>
+    </div>`;
+
+  const trashCard = trashInfo.item_count > 0 ? `
+    <div class="card">
+      <div class="label">Dashboard trash</div>
+      <div class="big">${trashInfo.size_human}</div>
+      <button class="danger-btn" id="emptyTrashBtn">Empty trash (permanent deletion)</button>
+      <div class="stat-line">${trashInfo.item_count} items moved here -- still taking up disk space</div>
+    </div>` : `
+    <div class="card">
+      <div class="label">Dashboard trash</div>
+      <div class="stat-line" style="margin-top:0;">Empty -- nothing pending permanent deletion</div>
+    </div>`;
+
+  el.innerHTML = totalCard + catCard + toolCard + trashCard;
+
+  el.querySelectorAll("[data-set-category]").forEach(btn => {
+    btn.onclick = () => goTable(`all:${btn.dataset.setCategory}`);
+  });
+  el.querySelectorAll("[data-set-tool]").forEach(btn => {
+    btn.onclick = () => {
+      document.getElementById("toolFilter").value = btn.dataset.setTool;
+      goTable("all:");
+    };
+  });
+  document.getElementById("recoverableStat").onclick = () => goTable("all:", true);
+  const emptyBtn = document.getElementById("emptyTrashBtn");
+  if (emptyBtn) emptyBtn.onclick = () => openEmptyTrashConfirm(trashInfo);
+}
+
+function openEmptyTrashConfirm(trashInfo) {
+  document.getElementById("emptyTrashText").textContent =
+    `Will permanently delete ${trashInfo.item_count} items (${trashInfo.size_human}) from ` +
+    `AgenticVisor/trash/. There is no going back -- if you need any of them, cancel and recover them by hand first.`;
+  const dialog = document.getElementById("emptyTrashDialog");
+  dialog.showModal();
+  document.getElementById("confirmEmptyTrash").onclick = async () => {
+    dialog.close();
+    const res = await fetch("/api/empty_trash", { method: "POST" });
+    const data = await res.json();
+    flash(`Trash emptied: ${data.freed_human} actually freed (${data.removed} items).`);
+    await loadScan();
+  };
+  document.getElementById("cancelEmptyTrash").onclick = () => dialog.close();
+}
+
+function legendHtml(items, filterName) {
+  return `<div class="legend">
+    ${items.map(item => `
+      <button class="legend-item" data-set-${filterName}="${escapeAttr(item.key)}" title="View ${escapeAttr(item.label)}">
+        <span class="legend-swatch" style="background:${item.color}"></span>
+        <span class="legend-label">${escapeHtml(item.label)}</span>
+        <span class="legend-size">${humanSize(item.size)}</span>
+      </button>`).join("")}
+  </div>`;
+}
+
+function donutSVG(items, total) {
+  if (!total) return "";
+  const r = 54, cx = 70, cy = 70, strokeWidth = 24;
+  const circumference = 2 * Math.PI * r;
+  let offset = 0;
+  const arcs = items.map(item => {
+    const frac = item.size / total;
+    const len = frac > 0 ? Math.max(frac * circumference, 1) : 0;
+    const arc = `<circle r="${r}" cx="${cx}" cy="${cy}" fill="none" stroke="${item.color}"
+      stroke-width="${strokeWidth}" stroke-dasharray="${len} ${circumference - len}"
+      stroke-dashoffset="${-offset}" transform="rotate(-90 ${cx} ${cy})">
+      <title>${escapeHtml(item.label)}: ${humanSize(item.size)}</title></circle>`;
+    offset += len;
+    return arc;
+  }).join("");
+  return `<svg width="140" height="140" viewBox="0 0 140 140" style="flex-shrink:0;">${arcs}</svg>`;
+}
+
+function populateToolFilter(entries) {
+  const tools = [...new Set(entries.map(e => e.tool))].sort();
+  const toolSel = document.getElementById("toolFilter");
+  const previous = toolSel.value;
+  toolSel.innerHTML = '<option value="">All tools</option>' +
+    tools.map(t => `<option value="${t}">${t}</option>`).join("");
+  toolSel.value = previous;
+}
+
+function currentFilters() {
+  const spec = filterSpec(state.filterKey);
+  return {
+    spec,
+    tool: document.getElementById("toolFilter").value,
+    search: document.getElementById("searchInput").value.toLowerCase(),
+    cleanupOnly: document.getElementById("cleanupOnly").checked,
+    staleDays: parseInt(document.getElementById("staleFilter").value, 10) || 0,
+  };
+}
+
+function filteredSorted() {
+  const f = currentFilters();
+  let rows = state.entries.filter(e =>
+    matchesFilter(e, f.spec) &&
+    (!f.tool || e.tool === f.tool) &&
+    (!f.search || e.path.toLowerCase().includes(f.search) ||
+      (e.title && e.title.toLowerCase().includes(f.search)) ||
+      (e.note && e.note.toLowerCase().includes(f.search))) &&
+    (!f.cleanupOnly || CLEANUP_CATEGORIES.has(e.category)) &&
+    (!f.staleDays || (e.age_days != null && e.age_days >= f.staleDays))
+  );
+  rows.sort((a, b) => {
+    const av = a[state.sortKey], bv = b[state.sortKey];
+    if (av < bv) return -1 * state.sortDir;
+    if (av > bv) return 1 * state.sortDir;
+    return 0;
+  });
+  return rows;
+}
+
+// Converts a child returned by /api/children (name/path/size_bytes...) into
+// something shaped like a scan Entry, so the same
+// renderRow() can be reused at any depth.
+function toChildEntry(c) {
+  return {
+    id: c.path, tool: "", category: "", path: c.path, size_bytes: c.size_bytes,
+    size_human: c.size_human, item_count: c.item_count, last_modified_iso: c.last_modified_iso,
+    age_days: c.age_days, title: c.name, note: "", sensitive: false, actionable: true,
+  };
+}
+
+// "3 days ago" instead of a raw date -- at a glance you can see whether it is
+// a cleanup candidate without doing the subtraction in your head.
+function ageLabel(ageDays) {
+  if (ageDays === null || ageDays === undefined) return "—";
+  if (ageDays <= 0) return "hoy";
+  if (ageDays === 1) return "ayer";
+  if (ageDays < 30) return `${ageDays} days ago`;
+  if (ageDays < 365) return `hace ${Math.round(ageDays / 30)} meses`;
+  return `${(ageDays / 365).toFixed(1)} years ago`;
+}
+
+// Flat list of what is visible right now (top-level entries +
+// the children of any expanded row, recursively), with their
+// depth -- this is what the table draws and what "select all"
+// uses as its universe.
+function visibleRows() {
+  const out = [];
+  function walk(nodes, depth) {
+    for (const node of nodes) {
+      out.push({ node, depth });
+      if (state.expandedPaths.has(node.path)) {
+        const children = (state.childrenCache.get(node.path) || []).map(toChildEntry);
+        walk(children, depth + 1);
+      }
+    }
+  }
+  walk(filteredSorted(), 0);
+  return out;
+}
+
+function findNodeById(id) {
+  const top = state.entries.find(x => x.id === id);
+  if (top) return top;
+  for (const children of state.childrenCache.values()) {
+    const c = children.find(x => x.path === id);
+    if (c) return toChildEntry(c);
+  }
+  return null;
+}
+
+async function toggleExpand(path) {
+  if (state.expandedPaths.has(path)) {
+    state.expandedPaths.delete(path);
+    render();
+    return;
+  }
+  state.expandedPaths.add(path);
+  render(); // the row expands at once; the children arrive a moment later
+  if (!state.childrenCache.has(path)) {
+    let children = [];
+    try {
+      const res = await fetch("/api/children?path=" + encodeURIComponent(path));
+      const data = await res.json();
+      children = data.children || [];
+    } catch (err) {
+      children = [];
+    }
+    state.childrenCache.set(path, children);
+    render();
+  }
+}
+
+function renderRow(e, depth) {
+  const expandable = e.item_count > 1;
+  const isExpanded = state.expandedPaths.has(e.path);
+  const toggle = expandable
+    ? `<button class="expand-toggle ${isExpanded ? "expanded" : ""}" data-toggle="${escapeAttr(e.path)}"
+        title="${isExpanded ? "Collapse" : "Show contents (" + e.item_count + " files)"}">${isExpanded ? "−" : "+"}</button>`
+    : `<span class="expand-spacer"></span>`;
+  return `
+    <tr class="${depth > 0 ? "child-row" : ""}">
+      <td>
+        <div style="display:flex; align-items:center; gap:4px; padding-left:${depth * 20}px;">
+          ${toggle}
+          ${e.actionable ? `<input type="checkbox" class="rowCheck" data-id="${escapeAttr(e.id)}"
+            ${state.selected.has(e.id) ? "checked" : ""}>` : ""}
+        </div>
+      </td>
+      <td>${e.tool || ""}</td>
+      <td>${e.category ? `<span class="badge" style="background:var(--${e.category})">${CATEGORY_LABELS[e.category] || e.category}</span>
+        ${e.sensitive ? '<span class="sensitive-flag" title="May contain credentials or sensitive data"> ⚠</span>' : ""}` : ""}</td>
+      <td>
+        ${e.title ? `<div class="title">${escapeHtml(e.title)}</div>` : ""}
+        <div class="path">${escapeHtml(e.path)}</div>
+        ${e.note ? `<div class="note">${escapeHtml(e.note)}</div>` : ""}
+      </td>
+      <td>${e.size_human}</td>
+      <td>${e.item_count}</td>
+      <td title="${escapeAttr(e.last_modified_iso)}">${ageLabel(e.age_days)}</td>
+      <td><div style="display:flex; gap:6px; flex-wrap:wrap;">
+        ${canPreview(e) ? `<button class="small-btn" data-preview="${escapeAttr(e.path)}">View</button>` : ""}
+        ${e.actionable
+          ? `<button data-single-trash="${escapeAttr(e.id)}">Trash</button>`
+          : `<span class="note">solo informativo</span>`}
+      </div></td>
+    </tr>`;
+}
+
+function render() {
+  const rows = visibleRows();
+  const tbody = document.getElementById("tbody");
+  document.getElementById("emptyMsg").style.display = rows.length ? "none" : "block";
+  tbody.innerHTML = rows.map(({ node, depth }) => renderRow(node, depth)).join("");
+  updateSelectionBar();
+}
+
+function updateSelectionBar() {
+  const bar = document.getElementById("selectionBar");
+  const n = state.selected.size;
+  bar.classList.toggle("visible", n > 0);
+  if (n > 0) {
+    let totalBytes = 0;
+    for (const id of state.selected) {
+      const node = findNodeById(id);
+      if (node) totalBytes += node.size_bytes;
+    }
+    document.getElementById("selectionSummary").textContent =
+      `${n} elemento(s) seleccionados · ${humanSize(totalBytes)}`;
+  }
+}
+
+function humanSize(n) {
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let size = n, i = 0;
+  while (size >= 1024 && i < units.length - 1) { size /= 1024; i++; }
+  return i === 0 ? `${size}${units[i]}` : `${size.toFixed(1)}${units[i]}`;
+}
+function escapeHtml(s) { return String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function escapeAttr(s) { return escapeHtml(s); }
+
+async function postJson(url, body) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return res.json();
+}
+
+async function trashPaths(paths) {
+  const data = await postJson("/api/trash", { paths });
+  const failed = Object.entries(data.results).filter(([, r]) => !r.ok);
+  if (failed.length) {
+    flash("Could not move: " + failed.map(([p, r]) => `${p}: ${r.error}`).join("; "));
+  }
+  await refreshAll();
+}
+
+function openConfirm(paths, label) {
+  document.getElementById("confirmText").textContent =
+    `Move ${label} to trash?`;
+  const modifiedToday = paths.some(id => {
+    const node = findNodeById(id);
+    return node && node.age_days === 0;
+  });
+  document.getElementById("confirmWarning").hidden = !modifiedToday;
+  const dialog = document.getElementById("confirmDialog");
+  dialog.showModal();
+  document.getElementById("confirmTrash").onclick = async () => {
+    dialog.close();
+    await trashPaths(paths);
+  };
+  document.getElementById("cancelTrash").onclick = () => dialog.close();
+}
+
+document.getElementById("tbody").addEventListener("change", (e) => {
+  if (e.target.classList.contains("rowCheck")) {
+    const id = e.target.dataset.id;
+    e.target.checked ? state.selected.add(id) : state.selected.delete(id);
+    updateSelectionBar();
+  }
+});
+
+document.getElementById("tbody").addEventListener("click", (e) => {
+  const togglePath = e.target.dataset.toggle;
+  if (togglePath) {
+    toggleExpand(togglePath);
+    return;
+  }
+  if (e.target.dataset.preview) {
+    openPreview(e.target.dataset.preview);
+    return;
+  }
+  const id = e.target.dataset.singleTrash;
+  if (id) {
+    const entry = findNodeById(id);
+    if (entry) openConfirm([id], `«${entry.path}» (${entry.size_human})`);
+  }
+});
+
+document.getElementById("trashSelectedBtn").onclick = () => {
+  const ids = [...state.selected];
+  openConfirm(ids, `${ids.length} elemento(s) seleccionados`);
+};
+
+document.getElementById("toolFilter").onchange = render;
+document.getElementById("searchInput").oninput = render;
+document.getElementById("cleanupOnly").onchange = render;
+document.getElementById("staleFilter").onchange = render;
+
+document.querySelectorAll("th[data-sort]").forEach(th => {
+  th.onclick = () => {
+    const key = th.dataset.sort;
+    state.sortDir = state.sortKey === key ? -state.sortDir : -1;
+    state.sortKey = key;
+    render();
+  };
+});
+
+document.getElementById("selectAll").onchange = (e) => {
+  const rows = visibleRows().map(r => r.node).filter(r => r.actionable);
+  rows.forEach(r => e.target.checked ? state.selected.add(r.id) : state.selected.delete(r.id));
+  render();
+};
+
+// ---- Content search ----
+const KIND_LABELS = {
+  user: "your messages", assistant: "responses", thinking: "reasoning",
+  tool: "tools", title: "title",
+};
+let contentTimer = null;
+let contentRequest = 0;
+let indexWatcher = null;
+
+function indexStatusText(info) {
+  if (info.last_error) return `Indexing error: ${info.last_error}`;
+  const s = info.stats;
+  const when = s.last_sync ? `last updated ${s.last_sync}` : "not indexed yet";
+  const busy = info.running ? " · indexando…" : "";
+  return `Index: ${s.sessions} sessions, ${s.messages} messages · ${when}${busy}`;
+}
+
+// The <mark> tags come from the server as \x01 and \x02; the snippet text is
+// escaped first, so session content is never interpreted as HTML.
+function renderSnippet(text) {
+  return escapeHtml(text).replace(/\x01/g, "<mark>").replace(/\x02/g, "</mark>");
+}
+
+async function runContentSearch() {
+  const query = document.getElementById("contentQuery").value.trim();
+  const box = document.getElementById("contentResults");
+  const request = ++contentRequest;
+  if (!query) { box.innerHTML = ""; return; }
+  if (query.length < 3) {
+    box.innerHTML = `<div class="note">Type at least 3 characters.</div>`;
+    return;
+  }
+  const data = await (await fetch("/api/content_search?q=" + encodeURIComponent(query))).json();
+  if (request !== contentRequest) return; // a newer search is already in progress
+  document.getElementById("indexStatus").textContent = indexStatusText(data.index);
+  if (data.index.running) watchIndex();
+  renderContentResults(data.results, query);
+}
+
+function renderContentResults(results, query) {
+  const box = document.getElementById("contentResults");
+  if (!results.length) {
+    box.innerHTML = `<div class="note">No session contains «${escapeHtml(query)}».</div>`;
+    return;
+  }
+  box.innerHTML = results.map(r => `
+    <div class="cs-item">
+      <div class="cs-title">
+        <span class="badge" style="background:${colorForTool(r.tool)}">${escapeHtml(r.tool)}</span>
+        <button class="linkish" data-open-path="${escapeAttr(r.path)}"
+          title="Show this path in the list">${escapeHtml(r.title)}</button>
+      </div>
+      <div class="path">${escapeHtml(r.path)}</div>
+      <div class="snippet">${renderSnippet(r.snippet)}</div>
+      <button class="small-btn" data-preview="${escapeAttr(r.key)}">View conversation</button>
+      <div class="note">${r.hits} match(es) · in: ${r.kinds.map(k => KIND_LABELS[k] || k).join(", ")}</div>
+    </div>`).join("");
+}
+
+// While the index is being built, we refresh the status and, when
+// it finishes, we repeat the search so new sessions appear.
+function watchIndex() {
+  if (indexWatcher) return;
+  indexWatcher = setInterval(async () => {
+    const info = await (await fetch("/api/index_status")).json();
+    document.getElementById("indexStatus").textContent = indexStatusText(info);
+    if (!info.running) {
+      clearInterval(indexWatcher);
+      indexWatcher = null;
+      runContentSearch();
+    }
+  }, 3000);
+}
+
+document.getElementById("contentQuery").oninput = () => {
+  clearTimeout(contentTimer);
+  contentTimer = setTimeout(runContentSearch, 300);
+};
+
+// Changing the mode rebuilds the index: if the server rejects the change
+// (a pass is running), we restore the option that is actually applied.
+document.getElementById("toolOutputs").onchange = async (e) => {
+  const data = await postJson("/api/search_settings", { tool_outputs: e.target.value });
+  if (!data.ok) {
+    document.getElementById("indexStatus").textContent = data.error;
+    const info = await (await fetch("/api/index_status")).json();
+    e.target.value = info.tool_outputs;
+    return;
+  }
+  document.getElementById("indexStatus").textContent = indexStatusText(data);
+  watchIndex();
+};
+
+document.getElementById("reindexBtn").onclick = async () => {
+  const info = await (await fetch("/api/reindex", { method: "POST" })).json();
+  document.getElementById("indexStatus").textContent = indexStatusText(info);
+  watchIndex();
+};
+
+document.getElementById("contentResults").addEventListener("click", (e) => {
+  if (e.target.dataset.preview) {
+    openPreview(e.target.dataset.preview);
+    return;
+  }
+  const path = e.target.dataset.openPath;
+  if (!path) return;
+  document.getElementById("searchInput").value = path;
+  goTable("all:");
+});
+
+// ---- Skills and plugins ----
+const extData = { inventory: null, editing: null, pendingAction: null };
+
+function isRecent(epochSeconds) {
+  return Boolean(epochSeconds) && Date.now() / 1000 - epochSeconds < 86400;
+}
+
+function extMeta(item) {
+  const parts = [];
+  if (item.version) parts.push(`v${item.version}`);
+  parts.push(item.size_human);
+  if (item.last_modified) {
+    parts.push(`modificado ${new Date(item.last_modified * 1000).toISOString().slice(0, 10)}`);
+  }
+  return parts.join(" · ");
+}
+
+function pluginStatus(enabled) {
+  if (enabled === true) return "Activo";
+  if (enabled === false) return "Desactivado";
+  return "Not configured";
+}
+
+function emptyGrid(text) {
+  return `<div class="note">${escapeHtml(text)}</div>`;
+}
+
+function pluginCard(p) {
+  return `
+    <article class="ext-card ${p.enabled === true ? "" : "off"}">
+      <div class="ext-name">${escapeHtml(p.name)}</div>
+      <div><span class="chip">${escapeHtml(p.marketplace || "no marketplace")}</span></div>
+      <div class="ext-desc">${escapeHtml(p.description || "No description")}</div>
+      <div class="ext-meta">${escapeHtml(extMeta(p))}</div>
+      <div class="ext-foot">
+        <label class="switch" title="Enable or disable in Claude Code">
+          <input type="checkbox" data-plugin="${escapeAttr(p.id)}" ${p.enabled === true ? "checked" : ""}>
+          <span></span>
+        </label>
+        <span class="note">${pluginStatus(p.enabled)}</span>
+      </div>
+    </article>`;
+}
+
+// The button points to SKILL.md, which is what the server can edit.
+function editButton(skill) {
+  return skill.has_skill_md
+    ? `<button class="small-btn" data-edit="${escapeAttr(skill.path + "/SKILL.md")}">Edit</button>`
+    : "";
+}
+
+function claudeSkillCard(s) {
+  const link = s.linked_to
+    ? `<span class="chip link" title="${escapeAttr(s.linked_to)}">enlace compartido</span>`
+    : "";
+  const description = s.description || (s.has_skill_md ? "No description" : "No SKILL.md: this folder is not a skill");
+  return `
+    <article class="ext-card ${s.enabled ? "" : "off"}">
+      <div class="ext-name">${escapeHtml(s.name)}</div>
+      <div>${link}</div>
+      <div class="ext-desc">${escapeHtml(description)}</div>
+      <div class="ext-meta">${escapeHtml(extMeta(s))}</div>
+      <div class="ext-foot">
+        ${s.has_skill_md ? `
+        <label class="switch" title="${s.enabled ? "Disable: moves to skills-disabled/" : "Enable: moves back to skills/"}">
+          <input type="checkbox" data-skill="${escapeAttr(s.name)}" ${s.enabled ? "checked" : ""}>
+          <span></span>
+        </label>` : `<span class="note">Cannot be enabled</span>`}
+        ${editButton(s)}
+      </div>
+    </article>`;
+}
+
+function cursorSkillCard(s) {
+  return `
+    <article class="ext-card">
+      <div class="ext-name">${escapeHtml(s.name)}</div>
+      <div class="ext-desc">${escapeHtml(s.description || "No description")}</div>
+      <div class="ext-meta">${escapeHtml(extMeta(s))}</div>
+      <div class="ext-foot"><span class="note">Built into Cursor</span>${editButton(s)}</div>
+    </article>`;
+}
+
+function cursorPluginCard(p) {
+  return `
+    <article class="ext-card">
+      <div class="ext-name">${escapeHtml(p.name)}</div>
+      <div><span class="chip">${escapeHtml(p.group)}</span></div>
+      <div class="ext-meta">${escapeHtml(extMeta(p))}</div>
+      <div class="ext-foot"><span class="note">Read-only</span></div>
+    </article>`;
+}
+
+function renderExtensions() {
+  const d = extData.inventory;
+  setCount("claude-skills", d.claude_skills.length);
+  setCount("claude-plugins", d.claude_plugins.length);
+  setCount("cursor-skills", d.cursor_skills.length);
+  setCount("cursor-plugins", d.cursor_plugins.length);
+  document.getElementById("grid-claude-skills").innerHTML =
+    d.claude_skills.map(claudeSkillCard).join("") || emptyGrid("No Claude Code skills.");
+  document.getElementById("grid-claude-plugins").innerHTML =
+    d.claude_plugins.map(pluginCard).join("") || emptyGrid("No plugins installed.");
+  document.getElementById("grid-cursor-skills").innerHTML =
+    d.cursor_skills.map(cursorSkillCard).join("") || emptyGrid("No Cursor skills.");
+  document.getElementById("grid-cursor-plugins").innerHTML =
+    d.cursor_plugins.map(cursorPluginCard).join("") || emptyGrid("No Cursor plugins.");
+}
+
+async function loadExtensions() {
+  extData.inventory = await (await fetch("/api/extensions")).json();
+  renderExtensions();
+}
+
+// Generic confirmation dialog. If the user cancels or closes it with Escape,
+// onCancel is called so the switch goes back to its previous state.
+function openAction({ text, warn = false, note = "", onConfirm, onCancel = () => {} }) {
+  extData.pendingAction = { onConfirm, onCancel };
+  document.getElementById("actionText").textContent = text;
+  document.getElementById("actionWarning").hidden = !warn;
+  document.getElementById("actionNote").textContent = note;
+  document.getElementById("actionDialog").showModal();
+}
+
+document.getElementById("actionConfirm").onclick = async () => {
+  const action = extData.pendingAction;
+  extData.pendingAction = null;
+  document.getElementById("actionDialog").close();
+  await action.onConfirm();
+};
+document.getElementById("actionCancel").onclick = () => document.getElementById("actionDialog").close();
+document.getElementById("actionDialog").addEventListener("close", () => {
+  const action = extData.pendingAction;
+  extData.pendingAction = null;
+  if (action) action.onCancel();
+});
+
+// Plugins change Claude Code's settings.json: like skills, they are
+// confirmed. A mis-click or a stray key press must not change anything silently.
+function togglePlugin(input) {
+  const id = input.dataset.plugin;
+  const enable = input.checked;
+  openAction({
+    text: `${enable ? "Enable" : "Disable"} the plugin «${id.split("@")[0]}» en Claude Code. settings.json is edited (with a backup).`,
+    note: "It is recorded in data/changes.log. If Claude Code was already open, restart it to notice.",
+    onCancel: () => { input.checked = !input.checked; },
+    onConfirm: async () => {
+      const res = await postJson("/api/plugin_toggle", { id, enabled: enable });
+      flash(res.ok ? "" : res.error);
+      if (!res.ok) input.checked = !input.checked;
+      loadExtensions();
+    },
+  });
+}
+
+function confirmSkillToggle(input) {
+  const name = input.dataset.skill;
+  const disable = !input.checked;
+  const skill = extData.inventory.claude_skills.find(s => s.name === name);
+  openAction({
+    text: disable
+      ? `Disable «${name}»: moves to skills-disabled/ and Claude Code stops loading it.`
+      : `Enable «${name}»: moves back to skills/ and Claude Code loads it again.`,
+    warn: Boolean(skill) && isRecent(skill.last_modified),
+    note: "If it is a link to ~/.agents, it is only unlinked from Claude: the shared content is not touched.",
+    onCancel: () => { input.checked = !input.checked; },
+    onConfirm: async () => {
+      const res = await postJson("/api/skill_toggle", { name, disabled: disable });
+      flash(res.ok ? "" : res.error);
+      if (!res.ok) input.checked = !input.checked;
+      refreshAll();
+    },
+  });
+}
+
+document.getElementById("grid-claude-skills").addEventListener("change", (e) => {
+  if (e.target.dataset.skill) confirmSkillToggle(e.target);
+});
+document.getElementById("grid-claude-plugins").addEventListener("change", (e) => {
+  if (e.target.dataset.plugin) togglePlugin(e.target);
+});
+["grid-claude-skills", "grid-cursor-skills"].forEach(id => {
+  document.getElementById(id).addEventListener("click", (e) => {
+    if (e.target.dataset.edit) openEditor(e.target.dataset.edit);
+  });
+});
+
+// ---- SKILL.md editor ----
+// Embedded code editor: JSON with live validation, or Markdown.
+// It is mounted each time the dialog opens, once it has a size.
+function mountEditor(hostId, content, mode, onChange) {
+  const host = document.getElementById(hostId);
+  host.innerHTML = "";
+  const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  return CodeEditor.createEditor(host, { doc: content, mode, dark, onChange });
+}
+
+let skEditor = null;
+
+function editorValue() {
+  return skEditor ? skEditor.getValue() : "";
+}
+
+function editorDirty() {
+  return extData.editing && editorValue() !== extData.editing.original;
+}
+
+async function openEditor(path) {
+  const res = await (await fetch("/api/skill_file?path=" + encodeURIComponent(path))).json();
+  if (!res.ok) { flash(res.error); return; }
+  flash("");
+  extData.editing = { path: res.path, mtime_ns: res.mtime_ns, original: res.content };
+  const skillName = res.path.split("/").slice(-2, -1)[0];
+  document.getElementById("edTitle").textContent = `${skillName} · SKILL.md`;
+  document.getElementById("edPath").textContent = res.path;
+  const linkBox = document.getElementById("edLinked");
+  linkBox.hidden = !res.linked_to;
+  linkBox.textContent = res.linked_to
+    ? `It is a link to ${res.linked_to}. Saving changes the original, which other tools also use. A copy is saved first.`
+    : "";
+  document.getElementById("edError").textContent = "";
+  document.getElementById("edSave").disabled = true;
+  document.getElementById("skillEditor").showModal();
+  skEditor = mountEditor("edHost", res.content, "markdown", () => {
+    document.getElementById("edSave").disabled = !editorDirty();
+  });
+}
+
+document.getElementById("edSave").onclick = async () => {
+  const ed = extData.editing;
+  const content = editorValue();
+  const res = await postJson("/api/skill_file", { path: ed.path, content, mtime_ns: ed.mtime_ns });
+  if (!res.ok) {
+    document.getElementById("edError").textContent = res.error;
+    return;
+  }
+  ed.mtime_ns = res.mtime_ns;
+  ed.original = content;
+  document.getElementById("edSave").disabled = true;
+  document.getElementById("edError").textContent = `Saved. Previous copy in ${res.backup}`;
+};
+
+function discardThen(onDiscard) {
+  if (!editorDirty()) { onDiscard(); return; }
+  openAction({
+    text: "There are unsaved changes. Discard them?",
+    onConfirm: async () => onDiscard(),
+  });
+}
+
+document.getElementById("edClose").onclick = () => discardThen(() => document.getElementById("skillEditor").close());
+document.getElementById("skillEditor").addEventListener("cancel", (e) => {
+  if (editorDirty()) {
+    e.preventDefault();
+    discardThen(() => document.getElementById("skillEditor").close());
+  }
+});
+
+// ---- Artifacts and canvases ----
+const artData = { inventory: null };
+
+function canvasCard(c) {
+  return `
+    <article class="ext-card">
+      <div class="ext-name">${escapeHtml(c.name)}</div>
+      <div><span class="chip" title="${escapeAttr(c.project)}">${escapeHtml(c.project)}</span></div>
+      <div class="ext-meta">${escapeHtml(c.size_human)} · modificado ${new Date(c.last_modified * 1000).toISOString().slice(0, 10)}</div>
+      <div class="ext-foot">
+        <button class="small-btn" data-view-canvas="${escapeAttr(c.path)}">View code</button>
+        <button class="small-btn danger-small" data-trash-canvas="${escapeAttr(c.path)}" data-canvas-name="${escapeAttr(c.name)}">Delete</button>
+      </div>
+    </article>`;
+}
+
+function claudeArtifactCard(a) {
+  return `
+    <article class="ext-card">
+      <div class="ext-name">${escapeHtml(a.title)}</div>
+      <div><span class="chip" title="${escapeAttr(a.project)}">${escapeHtml(a.project || "proyecto desconocido")}</span></div>
+      <div class="ext-desc">${escapeHtml(a.description || "No description")}</div>
+      <div class="ext-meta">publicado ${escapeHtml(a.date)}</div>
+      <div class="ext-foot">
+        <a class="open-link" href="${escapeAttr(a.url)}" target="_blank" rel="noopener">Open on claude.ai</a>
+      </div>
+    </article>`;
+}
+
+function renderArtifacts() {
+  const d = artData.inventory;
+  setCount("canvases", d.canvases.length);
+  setCount("claude-artifacts", d.claude_artifacts.length);
+  document.getElementById("grid-canvases").innerHTML =
+    d.canvases.map(canvasCard).join("") || emptyGrid("No Cursor canvases.");
+  document.getElementById("grid-claude-artifacts").innerHTML =
+    d.claude_artifacts.map(claudeArtifactCard).join("") || emptyGrid("No publications recorded in the transcripts.");
+}
+
+function fmtNum(n) {
+  return Number(n).toLocaleString("en-US");
+}
+
+function fmtTokens(n) {
+  if (n >= 1e9) return (n / 1e9).toFixed(2).replace(".", ",") + " mil M";
+  if (n >= 1e6) return (n / 1e6).toFixed(1).replace(".", ",") + " M";
+  if (n >= 1e3) return (n / 1e3).toFixed(1).replace(".", ",") + " k";
+  return String(n);
+}
+
+function usageCard(label, value, note) {
+  return `<div class="card"><div class="label">${escapeHtml(label)}</div><div class="big">${value}</div>${note ? `<div class="stat-line">${note}</div>` : ""}</div>`;
+}
+
+async function loadUsage() {
+  const section = document.getElementById("usageSection");
+  let usage;
+  try {
+    usage = await (await fetch("/api/usage")).json();
+  } catch (err) {
+    section.hidden = true;
+    return;
+  }
+  if (!usage || !usage.totals) { section.hidden = true; return; }
+  section.hidden = false;
+  const t = usage.totals;
+  const cacheShare = t.total ? Math.round(((t.cache_read + t.cache_write) / t.total) * 100) : 0;
+  document.getElementById("usageCards").innerHTML = [
+    usageCard("Total tokens", fmtTokens(t.total), `${fmtNum(usage.sessions)} sessions with recorded usage`),
+    usageCard("Output (what the model wrote)", fmtTokens(t.output), `Input: ${fmtTokens(t.input)} tokens`),
+    usageCard("Cache", fmtTokens(t.cache_read + t.cache_write), `${cacheShare}% of the total: reused context, costs much less than input`),
+    usageCard("Coste registrado", usage.cost_usd == null ? "—" :
+      "$" + usage.cost_usd.toFixed(2).replace(".", ","),
+      usage.cost_usd == null ? "Claude Code recorded no cost for these sessions" :
+      `Sum of ${fmtNum(usage.cost_sessions)} sessions that did record it`),
+  ].join("");
+
+  const modelRows = Object.entries(usage.by_model)
+    .sort((a, b) => b[1].total - a[1].total)
+    .map(([model, m]) => {
+      const share = t.total ? (m.total / t.total) * 100 : 0;
+      return `<tr><td>${escapeHtml(model)}<div class="usage-bar"><span style="width:${share.toFixed(1)}%"></span></div></td>
+        <td style="text-align:right; white-space:nowrap;">${fmtTokens(m.total)}</td></tr>`;
+    }).join("");
+  const topRows = usage.top_sessions.slice(0, 10).map(s => `
+    <tr>
+      <td><button class="linkish" data-open-path="${escapeAttr(s.path)}" title="Show this session in the list">${escapeHtml(s.title)}</button>
+        <div class="note">${escapeHtml(s.tool)}</div></td>
+      <td style="text-align:right; white-space:nowrap;">${fmtTokens(s.total)}${s.cost_usd != null ? `<div class="note">$${s.cost_usd.toFixed(2).replace(".", ",")}</div>` : ""}</td>
+    </tr>`).join("");
+  document.getElementById("usageDetails").innerHTML = `
+    <div class="card"><div class="label">By model</div>
+      <table class="usage-table">${modelRows || "<tr><td class='note'>No data</td></tr>"}</table></div>
+    <div class="card"><div class="label">Sessions using the most</div>
+      <table class="usage-table">${topRows || "<tr><td class='note'>No data</td></tr>"}</table>
+      <div class="usage-note">Cursor is not included: it does not store reliable token counters.</div></div>`;
+}
+
+async function loadArtifacts() {
+  artData.inventory = await (await fetch("/api/artifacts")).json();
+  renderArtifacts();
+}
+
+async function viewCanvas(path) {
+  const res = await (await fetch("/api/canvas_file?path=" + encodeURIComponent(path))).json();
+  if (!res.ok) { flash(res.error); return; }
+  flash("");
+  document.getElementById("cvTitle").textContent = path.split("/").pop();
+  document.getElementById("cvPath").textContent = res.path;
+  document.getElementById("cvCode").textContent = res.content;
+  document.getElementById("canvasViewer").showModal();
+}
+
+function trashCanvas(path, name) {
+  openAction({
+    text: `Move the canvas «${name}» to the dashboard trash (trash/). It is not deleted: you can recover it as long as you do not empty trash/.`,
+    note: "Recorded in trash/audit.log.",
+    onConfirm: async () => {
+      const res = await postJson("/api/trash", { paths: [path] });
+      const outcome = res.results && res.results[path];
+      flash(outcome && !outcome.ok ? outcome.error : "");
+      refreshAll();
+    },
+  });
+}
+
+document.getElementById("grid-canvases").addEventListener("click", (e) => {
+  if (e.target.dataset.viewCanvas) viewCanvas(e.target.dataset.viewCanvas);
+  else if (e.target.dataset.trashCanvas) trashCanvas(e.target.dataset.trashCanvas, e.target.dataset.canvasName);
+});
+
+document.getElementById("cvClose").onclick = () => document.getElementById("canvasViewer").close();
+
+// ---- Conversation preview ----
+const PREVIEW_ROLES = { user: "You", assistant: "Assistant", thinking: "Reasoning", tool: "Tool" };
+const pv = { key: "", offset: 0, limit: 40, hasMore: false };
+
+// Only the rows that are a conversation: Claude and Cursor transcripts,
+// Cursor CLI chats. Folders such as AgentStores or Jobs have no "View" button.
+// Cursor Desktop chats live inside state.vscdb: they are opened from search.
+function canPreview(entry) {
+  if (!FEATURES.preview) return false;
+  if (entry.category !== "sessions") return false;
+  const p = entry.path;
+  if (entry.tool === "claude-code") return p.endsWith(".jsonl");
+  if (entry.tool === "claude-desktop") return p.endsWith(".jsonl") || /\/local_[^/]+$/.test(p);
+  if (entry.tool === "cursor-cli") {
+    return p.includes("/agent-transcripts/") || /\/chats\/[^/]+\/[^/]+$/.test(p);
+  }
+  return false;
+}
+
+function messageHtml(m) {
+  const role = PREVIEW_ROLES[m.kind] || m.kind;
+  const note = m.truncated ? `<div class="pv-truncated">Message truncated for the preview.</div>` : "";
+  if (m.kind === "thinking" || m.kind === "tool") {
+    const firstLine = m.text.split("\n").find(l => l.trim()) || "";
+    return `
+      <details class="pv-msg pv-${m.kind}">
+        <summary>${role}: ${escapeHtml(firstLine.slice(0, 120))}</summary>
+        <pre>${escapeHtml(m.text)}</pre>${note}
+      </details>`;
+  }
+  return `
+    <div class="pv-msg pv-${m.kind}">
+      <div class="pv-role">${role}</div>
+      <div class="pv-text">${escapeHtml(m.text)}</div>${note}
+    </div>`;
+}
+
+async function openPreview(key, offset = 0) {
+  const res = await (await fetch(`/api/session_preview?key=${encodeURIComponent(key)}&offset=${offset}`)).json();
+  if (!res.ok) { flash(res.error); return; }
+  flash("");
+  pv.key = key;
+  pv.offset = res.offset;
+  pv.limit = res.limit;
+  pv.hasMore = res.has_more;
+  document.getElementById("pvTitle").textContent = res.label;
+  document.getElementById("pvMeta").textContent = shortPath(key.split("#")[0]);
+  document.getElementById("pvBody").innerHTML =
+    res.messages.map(messageHtml).join("") || emptyGrid("This page has no readable messages.");
+  document.getElementById("pvBody").scrollTop = 0;
+  const from = res.offset + 1;
+  const to = res.offset + res.messages.length;
+  document.getElementById("pvPage").textContent = res.messages.length ? `Mensajes ${from}–${to}` : "Fin";
+  document.getElementById("pvPrev").disabled = res.offset === 0;
+  document.getElementById("pvNext").disabled = !res.has_more;
+  const dialog = document.getElementById("previewDialog");
+  if (!dialog.open) dialog.showModal();
+}
+
+document.getElementById("pvPrev").onclick = () => openPreview(pv.key, Math.max(0, pv.offset - pv.limit));
+document.getElementById("pvNext").onclick = () => openPreview(pv.key, pv.offset + pv.limit);
+document.getElementById("pvClose").onclick = () => document.getElementById("previewDialog").close();
+
+// ---- Configuration ----
+const cfgData = { items: [], editing: null };
+
+function shortPath(path) {
+  return path.replace(/^\/Users\/[^/]+/, "~");
+}
+
+function configCard(c) {
+  const status = c.editable
+    ? `<span class="chip" style="color:var(--sessions); border-color:color-mix(in srgb, var(--sessions) 50%, var(--border));">Editable</span>`
+    : `<span class="chip">Read-only</span>`;
+  const button = c.editable
+    ? `<button class="small-btn" data-config-edit="${escapeAttr(c.id)}">Edit</button>`
+    : `<button class="small-btn" data-config-view="${escapeAttr(c.id)}">View</button>`;
+  return `
+    <article class="ext-card">
+      <div class="ext-name">${escapeHtml(c.label)}</div>
+      <div>${status}</div>
+      <div class="path">${escapeHtml(shortPath(c.path))}</div>
+      <div class="ext-desc">${escapeHtml(c.reasons[0] || "No credentials. It can be saved with a backup.")}</div>
+      <div class="ext-meta">${escapeHtml(c.size_human)} · modificado ${new Date(c.last_modified * 1000).toISOString().slice(0, 10)}</div>
+      <div class="ext-foot">${button}</div>
+    </article>`;
+}
+
+function renderConfigs() {
+  for (const agent of ["claude", "cursor"]) {
+    const items = cfgData.items.filter(i => i.agent === agent);
+    setCount(`config-${agent}`, items.length);
+    document.getElementById(`grid-config-${agent}`).innerHTML =
+      items.map(configCard).join("") || emptyGrid("No configuration files for this agent.");
+  }
+}
+
+async function loadConfigs() {
+  const data = await (await fetch("/api/configs")).json();
+  cfgData.items = data.items;
+  renderConfigs();
+}
+
+async function openConfig(id) {
+  const res = await (await fetch("/api/config?id=" + encodeURIComponent(id))).json();
+  if (!res.ok) { flash(res.error); return; }
+  flash("");
+  if (res.editable) {
+    openConfigEditor(res);
+    return;
+  }
+  // Read-only: the canvas viewer shows the text as it is, already masked.
+  document.getElementById("cvTitle").textContent = res.label;
+  document.getElementById("cvPath").textContent = `${res.path} · ${res.reasons.join(" ")}`;
+  document.getElementById("cvCode").textContent = res.content;
+  document.getElementById("canvasViewer").showModal();
+}
+
+let cfgEditor = null;
+
+// Validates the editor's JSON and shows the result. The exact errors
+// are also marked in the editor's gutter.
+// Broken JSON cannot be saved: the button is disabled as well as warning.
+function updateJsonStatus() {
+  const status = document.getElementById("ceStatus");
+  let valid = true;
+  try {
+    JSON.parse(cfgEditor.getValue());
+    status.className = "json-status ok";
+    status.textContent = "Valid JSON";
+  } catch (err) {
+    valid = false;
+    status.className = "json-status err";
+    status.textContent = "JSON has errors: " + err.message;
+  }
+  document.getElementById("ceSave").disabled = !valid || !configDirty();
+}
+
+function configValue() {
+  return cfgEditor ? cfgEditor.getValue() : "";
+}
+
+function configDirty() {
+  return cfgData.editing && configValue() !== cfgData.editing.original;
+}
+
+function openConfigEditor(res) {
+  cfgData.editing = { id: res.id, mtime_ns: res.mtime_ns, original: res.content };
+  document.getElementById("ceTitle").textContent = res.label;
+  document.getElementById("cePath").textContent = res.path;
+  document.getElementById("ceError").textContent = "";
+  document.getElementById("ceSave").disabled = true;
+  document.getElementById("ceFormat").hidden = res.format !== "json";
+  document.getElementById("ceStatus").hidden = res.format !== "json";
+  document.getElementById("configEditor").showModal();
+  const isJson = res.format === "json";
+  cfgEditor = mountEditor("ceHost", res.content, isJson ? "json" : "markdown", () => {
+    if (isJson) updateJsonStatus();
+    else document.getElementById("ceSave").disabled = !configDirty();
+  });
+  if (isJson) updateJsonStatus();
+}
+
+// Format only if the JSON is valid: never rewrites broken text.
+document.getElementById("ceFormat").onclick = () => {
+  try {
+    const pretty = JSON.stringify(JSON.parse(configValue()), null, 2) + "\n";
+    cfgEditor.setValue(pretty);
+  } catch (err) {
+    document.getElementById("ceError").textContent = "Cannot format: " + err.message;
+  }
+};
+
+document.getElementById("ceSave").onclick = async () => {
+  const ed = cfgData.editing;
+  const content = configValue();
+  const res = await postJson("/api/config", { id: ed.id, content, mtime_ns: ed.mtime_ns });
+  if (!res.ok) {
+    document.getElementById("ceError").textContent = res.error;
+    return;
+  }
+  ed.mtime_ns = res.mtime_ns;
+  ed.original = content;
+  document.getElementById("ceSave").disabled = true;
+  document.getElementById("ceError").textContent = `Saved. Previous copy in ${res.backup}`;
+  loadConfigs();
+};
+
+function discardConfigThen(onDiscard) {
+  if (!configDirty()) { onDiscard(); return; }
+  openAction({
+    text: "There are unsaved changes. Discard them?",
+    onConfirm: async () => onDiscard(),
+  });
+}
+
+document.getElementById("ceClose").onclick = () =>
+  discardConfigThen(() => document.getElementById("configEditor").close());
+document.getElementById("configEditor").addEventListener("cancel", (e) => {
+  if (configDirty()) {
+    e.preventDefault();
+    discardConfigThen(() => document.getElementById("configEditor").close());
+  }
+});
+
+["grid-config-claude", "grid-config-cursor"].forEach(id => {
+  document.getElementById(id).addEventListener("click", (e) => {
+    if (e.target.dataset.configEdit) openConfig(e.target.dataset.configEdit);
+    else if (e.target.dataset.configView) openConfig(e.target.dataset.configView);
+  });
+});
+
+// ---- Arranque ----
+// Only the data for the features this server version has is requested.
+function refreshAll() {
+  loadScan();
+  if (FEATURES.skills || FEATURES.plugins) loadExtensions();
+  if (FEATURES.artifacts) loadArtifacts();
+  if (FEATURES.config) loadConfigs();
+  loadUsage();
+}
+
+document.getElementById("rescanBtn").onclick = refreshAll;
+
+function initialView() {
+  const [view, rest] = location.hash.slice(1).split("/");
+  if (view === "table") {
+    state.filterKey = filterSpec(rest || "all:").key;
+    renderTableHeader();
+  }
+  showView(view || "resumen");
+}
+
+window.addEventListener("hashchange", initialView);
+loadFeatures().then(() => {
+  initialView();
+  refreshAll();
+  if (FEATURES.search) {
+    fetch("/api/index_status").then(r => r.json()).then(info => {
+      document.getElementById("toolOutputs").value = info.tool_outputs;
+      document.getElementById("indexStatus").textContent = indexStatusText(info);
+      if (info.running) watchIndex();
+    });
+  }
+});
+</script>
+</body>
+</html>

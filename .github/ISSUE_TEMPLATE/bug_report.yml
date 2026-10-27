@@ -1,0 +1,44 @@
+name: Bug report
+description: Something does not work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before you paste anything, remove personal data: conversations, paths with
+        your username, tokens or file contents. Replace them with generic examples.
+  - type: input
+    id: version
+    attributes:
+      label: AgenticVisor version
+      description: Output of `agenticvisor --version`
+      placeholder: 0.1.0-beta.1
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: [macOS (Apple Silicon), macOS (Intel), Linux, Windows, Other]
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the Claude sessions view
+        2. ...
+  - type: textarea
+    id: logs
+    attributes:
+      label: Terminal output or errors
+      description: Copy any message printed in the terminal, after removing personal data.
+      render: text

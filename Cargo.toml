@@ -1,0 +1,29 @@
+[package]
+name = "agenticvisor"
+version = "0.1.0-beta.1"
+edition = "2021"
+license = "MIT"
+description = "Local dashboard to see, search, clean up and configure what AI coding tools store on your computer"
+repository = "https://github.com/migueltg/AgenticVisor"
+readme = "README.md"
+keywords = ["ai", "claude", "cursor", "cleanup", "dashboard"]
+categories = ["command-line-utilities", "development-tools"]
+
+[[bin]]
+name = "agenticvisor"
+path = "src/main.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }
+tiny_http = "0.12"
+regex = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+dirs = "5"
+percent-encoding = "2"
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
