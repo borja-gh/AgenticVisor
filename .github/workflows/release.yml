@@ -88,11 +88,17 @@ jobs:
         working-directory: packages
         run: sha256sum agenticvisor-* > SHA256SUMS.txt
 
-      - name: Create release
+      - name: Create or update release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           tag="${{ github.ref_name }}"
+          # If a release for this tag already exists (re-run, or a release
+          # made by hand), replace its files instead of failing.
+          if gh release view "$tag" > /dev/null 2>&1; then
+            gh release upload "$tag" packages/* --clobber
+            exit 0
+          fi
           args=()
           # Versions with a suffix (beta, alpha, rc) are marked as pre-releases.
           if [[ "$tag" == *-* ]]; then args+=(--prerelease); fi
