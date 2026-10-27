@@ -1,0 +1,12 @@
+# gitleaks configuration (https://github.com/gitleaks/gitleaks).
+# Uses the default rules and skips the test file that contains fake
+# credentials on purpose, to check that the masking code hides them.
+
+title = "AgenticVisor"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Fake credentials used by the masking tests"
+paths = ['''tests/features\.rs''']

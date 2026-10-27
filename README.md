@@ -22,9 +22,9 @@ download the file for your system:
 
 | System | File |
 |--------|------|
-| macOS (Apple Silicon) | `agenticvisor-<version>-macos-arm64.tar.gz` |
-| Linux (x86-64) | `agenticvisor-<version>-linux-x64.tar.gz` |
-| Windows (x86-64) | `agenticvisor-<version>-windows-x64.zip` |
+| macOS (Apple Silicon) | `agenticvisor-vX.Y.Z-macos-arm64.tar.gz` |
+| Linux (x86-64) | `agenticvisor-vX.Y.Z-linux-x64.tar.gz` |
+| Windows (x86-64) | `agenticvisor-vX.Y.Z-windows-x64.zip` |
 
 Check the file against `SHA256SUMS.txt` before running it. Builds are not signed
 yet, so macOS and Windows may warn the first time you run them.
